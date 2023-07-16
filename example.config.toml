@@ -44,9 +44,15 @@ providers = [
 [[methods_mapping]]
   method =  'trace_transaction'
   providers = [
-    "https://polygon-rpc.com'",
-    "https://rpc.ankr.com/polygon", 
-    "https://polygon.llamarpc.com",
-    "https://polygon.blockpi.network/v1/rpc/public"
+    'https://polygon-rpc.com',
+    'https://rpc.ankr.com/polygon', 
+    'https://polygon.llamarpc.com',
+    'https://polygon.blockpi.network/v1/rpc/public'
   ]
 
+[[methods_mapping]]
+  method =  'eth_getBlockReceipts'
+  providers = [
+    'https://polygon-rpc.com',
+    'https://rpc.ankr.com/polygon', 
+  ]

@@ -53,7 +53,12 @@ func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
 
 	// Check the response for error conditions
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("non-OK response returned")
+		var buf bytes.Buffer
+		_, err := buf.ReadFrom(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New(buf.String())
 	}
 
 	// Read the response body
