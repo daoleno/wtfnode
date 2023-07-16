@@ -76,6 +76,14 @@ func (p *Proxy) Start() {
 			return
 		}
 		defer resp.Body.Close()
+
+		// Copy the headers from the original response to the response writer's headers
+		for key, values := range resp.Header {
+			for _, value := range values {
+				w.Header().Add(key, value)
+			}
+		}
+
 		body, _ := ioutil.ReadAll(resp.Body)
 		w.Write(body)
 	})
@@ -92,7 +100,6 @@ func (p *Proxy) ForwardRequest(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	fmt.Printf("p.mapping: %v\n", p.BalancerMapping)
 	// Get the balancer for the method
 	balancer, ok := p.BalancerMapping[method]
 	if !ok {
