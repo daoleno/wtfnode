@@ -72,6 +72,7 @@ func (p *Proxy) Start() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := p.ForwardRequest(r)
 		if err != nil {
+			log.Err(err).Msg("Error forwarding request")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
