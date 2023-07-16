@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -56,7 +56,7 @@ func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
 	}
 
 	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
 		ProtoMinor:    resp.ProtoMinor,
 		ContentLength: int64(len(body)),
 		Header:        resp.Header,
-		Body:          ioutil.NopCloser(bytes.NewReader(body)), // Create a new ReadCloser from the body
+		Body:          io.NopCloser(bytes.NewReader(body)), // Create a new ReadCloser from the body
 	}
 
 	// Return the new response

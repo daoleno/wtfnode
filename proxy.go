@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/rs/zerolog/log"
@@ -78,14 +78,10 @@ func (p *Proxy) Start() {
 		}
 		defer resp.Body.Close()
 
-		// Copy the headers from the original response to the response writer's headers
-		for key, values := range resp.Header {
-			for _, value := range values {
-				w.Header().Add(key, value)
-			}
-		}
+		// for simplicity, just set content type to JSON
+		w.Header().Set("Content-Type", "application/json")
 
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		w.Write(body)
 	})
 
@@ -95,51 +91,154 @@ func (p *Proxy) Start() {
 
 // ForwardRequest is a method that takes a JSON-RPC request and forwards it to the appropriate backend.
 func (p *Proxy) ForwardRequest(req *http.Request) (*http.Response, error) {
-	// Parse the JSON-RPC method from the request
-	method, err := parseMethod(req)
+	// Parse the JSON-RPC request
+	var rpcRequest interface{}
+	err := json.NewDecoder(req.Body).Decode(&rpcRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the balancer for the method
-	balancer, ok := p.BalancerMapping[method]
-	if !ok {
-		// If there isn't a specific balancer, use the general one
-		balancer = p.Balancer
+	// Check if the request is a batch request
+	isBatch := false
+	var batchRequests []interface{}
+	switch rpcRequest := rpcRequest.(type) {
+	case []interface{}:
+		batchRequests = rpcRequest
+		isBatch = true
+	case map[string]interface{}:
+		batchRequests = []interface{}{rpcRequest}
+		isBatch = false
+	default:
+		return nil, errors.New("invalid JSON-RPC request format")
 	}
 
-	// Use the failover logic with the specific balancer
-	return p.FailoverRequest(req, balancer)
+	// Create a response slice to hold the responses for each request
+	responses := make([]*http.Response, len(batchRequests))
+
+	for i, batchReq := range batchRequests {
+		// Extract the method from the individual request
+		method, ok := extractMethod(batchReq)
+		if !ok {
+			responses[i] = createErrorResponse(http.StatusBadRequest, "Method not found in request")
+			continue
+		}
+
+		// Get the balancer for the method
+		balancer, ok := p.BalancerMapping[method]
+		if !ok {
+			// If there isn't a specific balancer, use the general one
+			balancer = p.Balancer
+		}
+
+		// Create a new http.Request for the individual request
+		individualReq := cloneRequest(req)
+		setMethodInRequest(individualReq, batchReq.(map[string]interface{}))
+
+		// Forward the individual request with failover logic
+		response, err := p.FailoverRequest(individualReq, balancer)
+		if err != nil {
+			responses[i] = createErrorResponse(http.StatusInternalServerError, err.Error())
+			continue
+		}
+
+		responses[i] = response
+	}
+
+	// Create the response based on the request format
+	var httpResponse *http.Response
+	if isBatch {
+		// Create a batch response
+		batchResponse := createBatchResponse(responses)
+
+		// Marshal the batch response into JSON
+		responseBytes, err := json.Marshal(batchResponse)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create a new http.Response with the batch response
+		httpResponse = &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(bytes.NewReader(responseBytes)),
+		}
+	} else {
+		// Use the response of the single request
+		httpResponse = responses[0]
+	}
+
+	return httpResponse, nil
 }
 
-// parseMethod is a helper function that parses the JSON-RPC method from the request.
-func parseMethod(req *http.Request) (string, error) {
-	// Check if the request body is nil
-	if req.Body == nil {
-		return "", errors.New("request body is nil")
+// Helper function to clone a http.Request
+func cloneRequest(r *http.Request) *http.Request {
+	clone := r.Clone(r.Context())
+	clone.Header = make(http.Header)
+	for k, vs := range r.Header {
+		clone.Header[k] = vs
+	}
+	return clone
+}
+
+// Helper function to set method in http.Request
+func setMethodInRequest(r *http.Request, req map[string]interface{}) {
+	req["jsonrpc"] = "2.0"
+	reqBytes, _ := json.Marshal(req)
+	r.Body = io.NopCloser(bytes.NewReader(reqBytes))
+	r.ContentLength = int64(len(reqBytes))
+}
+
+// Helper function to create an error response
+func createErrorResponse(statusCode int, errMsg string) *http.Response {
+	errResponse := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"error": map[string]interface{}{
+			"code":    statusCode,
+			"message": errMsg,
+		},
+		"id": nil,
 	}
 
-	// Read the request body into a byte slice
-	bodyBytes, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		return "", err
+	errResponseBytes, _ := json.Marshal(errResponse)
+
+	return &http.Response{
+		StatusCode: statusCode,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(bytes.NewReader(errResponseBytes)),
 	}
+}
 
-	// Create a new ReadCloser with the byte slice
-	req.Body = ioutil.NopCloser(bytes.NewReader(bodyBytes))
+// Helper function to create a batch response
+func createBatchResponse(responses []*http.Response) []interface{} {
+	batchResponse := make([]interface{}, len(responses))
+	for i, response := range responses {
+		if response != nil {
+			// Read the response body
+			responseBody, _ := io.ReadAll(response.Body)
+			response.Body.Close()
 
-	// Decode the request body into a map
-	var payload map[string]interface{}
-	err = json.Unmarshal(bodyBytes, &payload)
-	if err != nil {
-		return "", err
+			// Parse the response body JSON
+			var responseMap map[string]interface{}
+			_ = json.Unmarshal(responseBody, &responseMap)
+
+			// Set the individual response in the batch response
+			batchResponse[i] = responseMap
+		}
 	}
+	return batchResponse
+}
 
-	// Extract the method from the payload
-	method, ok := payload["method"].(string)
+// Helper function to extract the method from the JSON-RPC request
+func extractMethod(request interface{}) (string, bool) {
+	requestMap, ok := request.(map[string]interface{})
 	if !ok {
-		return "", errors.New("method not found in payload")
+		return "", false
 	}
 
-	return method, nil
+	method, ok := requestMap["method"].(string)
+	if !ok {
+		return "", false
+	}
+
+	return method, true
 }

@@ -8,6 +8,7 @@ WTFNode is a proxy for distributing requests to multiple evm node providers.
 - Rate Limiting
 - Request Retry
 - Failover
+- Batch Request
 
 ## Installation
 
