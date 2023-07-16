@@ -1,4 +1,4 @@
-# WTFNode
+# 👺 WTFNode
 
 WTFNode is a proxy for distributing requests to multiple evm node providers.
 
@@ -9,6 +9,7 @@ WTFNode is a proxy for distributing requests to multiple evm node providers.
 - Request Retry
 - Failover
 - Batch Request
+- Custom Method Mapping
 
 ## Installation
 
