@@ -6,6 +6,8 @@ burst = 5
 # Retry limit
 retry_limit = 3
 
+send_batch_directly = true
+
 # List of all providers
 providers = [
   'https://rpc.ankr.com/polygon',
