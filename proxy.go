@@ -14,10 +14,11 @@ import (
 
 // Proxy is a struct that holds the map of JSON-RPC methods to backend URLs and a slice of Provider clients.
 type Proxy struct {
-	BalancerMapping map[string]*Balancer
-	Balancer        *Balancer
-	RetryLimit      int
-	Limiter         *rate.Limiter
+	BalancerMapping   map[string]*Balancer
+	Balancer          *Balancer
+	RetryLimit        int
+	Limiter           *rate.Limiter
+	SendBatchDirectly bool
 }
 
 // NewProxy is a constructor function that creates a new Proxy.
@@ -60,10 +61,11 @@ func NewProxy(config Config) *Proxy {
 
 	// Create a new Proxy
 	return &Proxy{
-		BalancerMapping: balancerMapping,
-		Balancer:        balancer,
-		RetryLimit:      config.RetryLimit,
-		Limiter:         limiter,
+		BalancerMapping:   balancerMapping,
+		Balancer:          balancer,
+		RetryLimit:        config.RetryLimit,
+		Limiter:           limiter,
+		SendBatchDirectly: config.SendBatchDirectly,
 	}
 }
 
@@ -78,8 +80,10 @@ func (p *Proxy) Start() {
 		}
 		defer resp.Body.Close()
 
-		// for simplicity, just set content type to JSON
-		w.Header().Set("Content-Type", "application/json")
+		// Copy the response headers
+		for k, v := range resp.Header {
+			w.Header()[k] = v
+		}
 
 		body, _ := io.ReadAll(resp.Body)
 		w.Write(body)
@@ -110,6 +114,34 @@ func (p *Proxy) ForwardRequest(req *http.Request) (*http.Response, error) {
 		isBatch = false
 	default:
 		return nil, errors.New("invalid JSON-RPC request format")
+	}
+
+	// Check if the batch should be sent directly
+	if p.SendBatchDirectly && isBatch {
+		// Extract the method from the individual request
+		method, ok := extractMethod(batchRequests)
+		if !ok {
+			return createErrorResponse(http.StatusBadRequest, "Method not found in request"), nil
+		}
+
+		// Get the balancer for the method
+		balancer, ok := p.BalancerMapping[method]
+		if !ok {
+			// If there isn't a specific balancer, use the general one
+			balancer = p.Balancer
+		}
+
+		// Create a new http.Request for the batch request
+		batchReq := cloneRequest(req)
+		setBatchRequestInRequest(batchReq, batchRequests)
+
+		// Forward the batch request directly to the backend
+		response, err := p.FailoverRequest(batchReq, balancer)
+		if err != nil {
+			return nil, err
+		}
+
+		return response, nil
 	}
 
 	// Create a response slice to hold the responses for each request
@@ -168,6 +200,19 @@ func (p *Proxy) ForwardRequest(req *http.Request) (*http.Response, error) {
 	}
 
 	return httpResponse, nil
+}
+
+// Helper function to set batch request in http.Request
+func setBatchRequestInRequest(r *http.Request, requests []interface{}) {
+	// Marshal the batch request into JSON
+	batchRequestBytes, err := json.Marshal(requests)
+	if err != nil {
+		// Handle error
+		return
+	}
+
+	r.Body = io.NopCloser(bytes.NewReader(batchRequestBytes))
+	r.ContentLength = int64(len(batchRequestBytes))
 }
 
 // Helper function to clone a http.Request
@@ -230,15 +275,19 @@ func createBatchResponse(responses []*http.Response) []interface{} {
 
 // Helper function to extract the method from the JSON-RPC request
 func extractMethod(request interface{}) (string, bool) {
-	requestMap, ok := request.(map[string]interface{})
-	if !ok {
-		return "", false
+	switch req := request.(type) {
+	case map[string]interface{}:
+		method, ok := req["method"].(string)
+		if ok {
+			return method, true
+		}
+	case []interface{}:
+		if len(req) > 0 {
+			if method, ok := req[0].(map[string]interface{})["method"].(string); ok {
+				return method, true
+			}
+		}
 	}
 
-	method, ok := requestMap["method"].(string)
-	if !ok {
-		return "", false
-	}
-
-	return method, true
+	return "", false
 }

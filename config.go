@@ -14,6 +14,7 @@ type Config struct {
 	RequestsPerSecond int             `mapstructure:"requests_per_second"`
 	Burst             int             `mapstructure:"burst"`
 	RetryLimit        int             `mapstructure:"retry_limit"`
+	SendBatchDirectly bool            `mapstructure:"send_batch_directly"`
 }
 
 type MethodMapping struct {

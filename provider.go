@@ -34,6 +34,7 @@ func NewProvider(urlStr string) (*Provider, error) {
 // }
 
 // SendRequest is a method that takes an http.Request, updates the URL, and sends it to the backend service.
+// It returns an http.Response and an error if there was a problem sending the request or receiving the response.
 func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
 	// Create a new HTTP request
 	newReq, err := http.NewRequest(req.Method, p.URL.String(), req.Body)
