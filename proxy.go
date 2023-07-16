@@ -136,7 +136,7 @@ func (p *Proxy) ForwardRequest(req *http.Request) (*http.Response, error) {
 		setBatchRequestInRequest(batchReq, batchRequests)
 
 		// Forward the batch request directly to the backend
-		response, err := p.FailoverRequest(batchReq, balancer)
+		response, err := p.FailoverRequest(batchReq, balancer, method)
 		if err != nil {
 			return nil, err
 		}
@@ -167,7 +167,7 @@ func (p *Proxy) ForwardRequest(req *http.Request) (*http.Response, error) {
 		setMethodInRequest(individualReq, batchReq.(map[string]interface{}))
 
 		// Forward the individual request with failover logic
-		response, err := p.FailoverRequest(individualReq, balancer)
+		response, err := p.FailoverRequest(individualReq, balancer, method)
 		if err != nil {
 			responses[i] = createErrorResponse(http.StatusInternalServerError, err.Error())
 			continue
