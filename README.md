@@ -12,7 +12,7 @@ WTFNode is a proxy for distributing requests to multiple evm node providers.
 ## Installation
 
 ```sh
-go install github.com/daoleno/wtfnode-cli
+go install github.com/daoleno/wtfnode-cli@latest
 ```
 
 ## Usage
