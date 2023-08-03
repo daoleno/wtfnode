@@ -86,10 +86,14 @@ func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
 
 	resp.Body.Close()
 
+	if len(body) == 0 {
+		return nil, errors.New("received empty response")
+	}
+
 	var responses JSONRPCBatchResponse
-	if err := json.Unmarshal(body, &responses); err != nil {
+	if err = json.Unmarshal(body, &responses); err != nil {
 		var singleResponse JSONRPCResponse
-		if err := json.Unmarshal(body, &singleResponse); err != nil {
+		if err = json.Unmarshal(body, &singleResponse); err != nil {
 			return nil, err
 		}
 		if singleResponse.Error != nil {
