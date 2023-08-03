@@ -96,12 +96,12 @@ func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
 		if err = json.Unmarshal(body, &singleResponse); err != nil {
 			return nil, err
 		}
-		if singleResponse.Error != nil {
+		if singleResponse.Error != nil && singleResponse.Error.Message != "execution reverted" {
 			return nil, errors.New(singleResponse.Error.Message)
 		}
 	} else {
 		for _, response := range responses {
-			if response.Error != nil {
+			if response.Error != nil && response.Error.Message != "execution reverted" {
 				return nil, errors.New(response.Error.Message)
 			}
 		}
