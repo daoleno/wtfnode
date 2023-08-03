@@ -29,7 +29,7 @@ type JSONRPCResponse struct {
 	Version string          `json:"jsonrpc"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *JSONRPCError   `json:"error,omitempty"`
-	ID      int             `json:"id"`
+	ID      int64           `json:"id"`
 }
 
 type JSONRPCError struct {
@@ -40,42 +40,7 @@ type JSONRPCError struct {
 
 type JSONRPCBatchResponse []JSONRPCResponse
 
-type JSONRPCRequest struct {
-	ID     int             `json:"id"`
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params"`
-}
-
-type JSONRPCBatchRequest []JSONRPCRequest
-
-// Check if request is a batch JSON-RPC request or not
-func isBatchJSONRPCRequest(req *http.Request) (bool, error) {
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		return false, err
-	}
-
-	req.Body = io.NopCloser(bytes.NewBuffer(body))
-
-	var batchReq JSONRPCBatchRequest
-	err = json.Unmarshal(body, &batchReq)
-
-	if err != nil {
-		// Error occurred. Treat as not a batch request.
-		return false, nil
-	}
-
-	// It is a batch JSON-RPC request.
-	return true, nil
-}
-
-// Send JSON-RPC request and handle errors in response
 func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
-	isBatch, err := isBatchJSONRPCRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
 	newReq, err := http.NewRequest(req.Method, p.URL.String(), req.Body)
 	if err != nil {
 		return nil, err
@@ -121,27 +86,20 @@ func (p *Provider) SendRequest(req *http.Request) (*http.Response, error) {
 
 	resp.Body.Close()
 
-	if isBatch {
-		var batchJsonResp JSONRPCBatchResponse
-		err = json.Unmarshal(body, &batchJsonResp)
-		if err != nil {
+	var responses JSONRPCBatchResponse
+	if err := json.Unmarshal(body, &responses); err != nil {
+		var singleResponse JSONRPCResponse
+		if err := json.Unmarshal(body, &singleResponse); err != nil {
 			return nil, err
 		}
-
-		for _, resp := range batchJsonResp {
-			if resp.Error != nil {
-				return nil, errors.New(resp.Error.Message)
-			}
+		if singleResponse.Error != nil {
+			return nil, errors.New(singleResponse.Error.Message)
 		}
 	} else {
-		var jsonResp JSONRPCResponse
-		err = json.Unmarshal(body, &jsonResp)
-		if err != nil {
-			return nil, err
-		}
-
-		if jsonResp.Error != nil {
-			return nil, errors.New(jsonResp.Error.Message)
+		for _, response := range responses {
+			if response.Error != nil {
+				return nil, errors.New(response.Error.Message)
+			}
 		}
 	}
 
