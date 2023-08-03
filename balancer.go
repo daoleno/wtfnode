@@ -25,3 +25,11 @@ func (b *Balancer) NextProvider() *Provider {
 
 	return selectedProvider
 }
+
+// ResetProviderList resets the counter in the Balancer to the start of the providers list
+func (b *Balancer) ResetProviderList() {
+	b.Mu.Lock()
+	defer b.Mu.Unlock()
+
+	b.Counter = 0
+}
