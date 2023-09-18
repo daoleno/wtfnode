@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/daoleno/wtfnode/config"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
 )
@@ -22,7 +23,7 @@ type Proxy struct {
 }
 
 // NewProxy is a constructor function that creates a new Proxy.
-func NewProxy(config Config) *Proxy {
+func NewProxy(config config.ProxyConfig) *Proxy {
 	// Create a slice of all Provider clients
 	allProviders := make([]*Provider, len(config.Providers))
 	var err error

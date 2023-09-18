@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Config struct {
+type ProxyConfig struct {
 	Providers         []string        `mapstructure:"providers"`
 	MethodsMapping    []MethodMapping `mapstructure:"methods_mapping"`
 	RequestsPerSecond int             `mapstructure:"requests_per_second"`
@@ -23,7 +23,7 @@ type MethodMapping struct {
 }
 
 // LoadConfig loads the mapping of JSON-RPC methods to backend URLs from a configuration file
-func LoadConfig(file string) Config {
+func LoadConfig(file string) ProxyConfig {
 	viper.SetConfigFile(file)   // set the custom file path
 	viper.SetConfigType("toml") // REQUIRED if the config file does not have the extension in the name
 
@@ -32,7 +32,7 @@ func LoadConfig(file string) Config {
 		panic(fmt.Errorf("fatal error config file: %s", err))
 	}
 
-	var config Config
+	var config ProxyConfig
 	err = viper.Unmarshal(&config)
 	if err != nil {
 		fmt.Printf("Unable to decode into struct, %v", err)

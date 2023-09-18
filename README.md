@@ -14,14 +14,14 @@ WTFNode is a proxy for distributing requests to multiple evm node providers.
 ## Installation
 
 ```sh
-go install github.com/daoleno/wtfnode-cli@latest
+go install github.com/daoleno/wtfnode@latest
 ```
 
 ## Usage
 
 ```sh
-mv example.config.toml config.toml
-wtfnode-cli -c config.toml
+mv example.proxy.toml proxy.toml
+wtfnode proxy -c proxy.toml
 ```
 
 ## License
