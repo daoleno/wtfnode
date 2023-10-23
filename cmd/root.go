@@ -6,6 +6,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/daoleno/wtfnode/dashboard"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,9 @@ var rootCmd = &cobra.Command{
 	Short: "👺 A command-line tool for saving EVM developers' lives.",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) {
+		dashboard.Run()
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
